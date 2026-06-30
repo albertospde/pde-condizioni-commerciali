@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Condizioni Speciali di Vendita - PDE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  #loginScreen{position:fixed;inset:0;background:#f4f6fb;display:flex;align-items:center;justify-content:center;z-index:999;}
+  #loginBox{background:#fff;border:1px solid #e1e5ee;border-radius:12px;padding:36px 34px;width:320px;box-shadow:0 4px 20px rgba(0,0,0,.08);text-align:center;}
+  #loginBox img{height:32px;background:#fff;border-radius:8px;padding:4px 8px;margin-bottom:18px;}
+  #loginBox input{width:100%;padding:9px 10px;border:1px solid #e1e5ee;border-radius:6px;font-size:13px;margin-bottom:10px;}
+  #loginBox button{width:100%;padding:9px;border:none;border-radius:6px;background:#00b4e8;color:#fff;font-weight:600;cursor:pointer;}
+  #loginBox button:hover{background:#0098c7;}
+  #loginErr{color:#b3261e;font-size:12px;min-height:16px;margin-bottom:6px;}
+  #appRoot{display:none;}
+  #logoutBtn{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;}
+  #logoutBtn:hover{background:rgba(255,255,255,.12);}
+</style>
+<style>
+  :root{
+    --blue:#00b4e8; --navy:#1a2d6b; --bg:#f4f6fb; --line:#e1e5ee;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);margin:0;color:#1c2333;}
+  header{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;}
+  header img{height:30px;background:#fff;border-radius:6px;padding:2px 6px;}
+  header h1{font-size:18px;margin:0;font-weight:600;}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 20px 60px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:20px;box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h2{font-size:15px;margin:0 0 14px;color:var(--navy);border-bottom:2px solid var(--blue);padding-bottom:8px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  label{font-size:12px;font-weight:600;color:#475069;display:block;margin-bottom:4px;}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;}
+  input:focus,select:focus{outline:2px solid var(--blue);border-color:var(--blue);}
+  .radio-row{display:flex;gap:18px;align-items:center;}
+  .radio-row label{display:flex;align-items:center;gap:6px;font-weight:500;margin:0;}
+  .radio-row input{width:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{background:var(--navy);color:#fff;padding:8px 6px;text-align:left;font-weight:600;}
+  td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tr:hover{background:#f8fafd;}
+  .btn{cursor:pointer;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-primary:hover{background:#0098c7;}
+  .btn-ghost{background:#eef1f8;color:var(--navy);}
+  .btn-ghost:hover{background:#e2e7f4;}
+  .btn-danger{background:#fde8e8;color:#b3261e;}
+  .btn-mail{background:#1a2d6b;color:#fff;}
+  .btn-mail:hover{background:#142253;}
+  .row-actions{display:flex;gap:8px;margin-top:10px;}
+  .small{font-size:11px;color:#7c879f;margin-top:6px;}
+  .pill{display:inline-block;background:var(--blue);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600;}
+  .chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .chip{background:#eef1f8;color:var(--navy);border-radius:16px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:6px;}
+  .chip button{border:none;background:transparent;color:#b3261e;font-weight:700;cursor:pointer;font-size:13px;}
+  .footer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
+  .badge-g1{background:#fff3cd;color:#7a5b00;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;}
+  .logo-upload{display:flex;align-items:center;gap:10px;}
+  .logo-upload img{height:38px;border:1px dashed var(--line);border-radius:6px;padding:4px;background:#fff;}
+  select[disabled]{background:#f4f6fb;color:#9aa3b8;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div id="loginBox">
+    <img src="https://albertospde.github.io/pde-hub/pde_logo.png" alt="PDE">
+    <div id="loginErr"></div>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password">
+    <button onclick="doLogin()">Accedi</button>
+  </div>
+</div>
+
+<div id="appRoot">
+<header>
+  <img src="https://albertospde.github.io/pde-hub/pde_logo.png" alt="PDE">
+  <h1>Richiesta Variazione Condizioni Commerciali — Messaggerie</h1>
+  <button id="logoutBtn" onclick="doLogout()">Esci</button>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>1. Tipo richiesta</h2>
+    <div class="grid">
+      <div>
+        <label>Tipo richiesta</label>
+        <div class="radio-row">
+          <label><input type="radio" name="tipo" value="Inserire" checked> Inserire</label>
+          <label><input type="radio" name="tipo" value="Variare"> Variare</label>
+          <label><input type="radio" name="tipo" value="Eliminare"> Eliminare</label>
+        </div>
+      </div>
+      <div>
+        <label id="lblData">Data decorrenza</label>
+        <input type="date" id="dataDecorrenza">
+      </div>
+      <div>
+        <label>Mittente</label>
+        <input type="text" id="mittente" value="PDE - Promozione Distribuzione Editoriale" disabled>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:14px;">
+      <div>
+        <label>Logo Messaggerie (opzionale, per export identico al modulo)</label>
+        <div class="logo-upload">
+          <img id="logoPreview" src="" style="display:none;">
+          <input type="file" id="logoInput" accept="image/png,image/jpeg">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Clienti / Punti vendita <span class="small">(stesse condizioni applicate a più clienti contemporaneamente)</span></h2>
+    <div class="grid">
+      <div>
+        <label>Codice Cliente / Gruppo</label>
+        <input type="text" id="cliCodice" placeholder="es. 2424601">
+      </div>
+      <div>
+        <label>Ragione Sociale</label>
+        <input type="text" id="cliRagSoc" placeholder="es. CRISTIANO LIBRI SRL">
+      </div>
+      <div>
+        <label>Località</label>
+        <input type="text" id="cliLocalita" placeholder="es. Milano">
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="btn btn-primary" onclick="addCliente()">+ Aggiungi cliente</button>
+    </div>
+    <div class="chip-list" id="clientiList"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Editori e condizioni</h2>
+    <div class="grid">
+      <div>
+        <label>Editore</label>
+        <select id="selEditore"></select>
+      </div>
+      <div>
+        <label>Sconto Anagrafico %</label>
+        <input type="number" step="0.01" id="rowSconto" placeholder="es. 40.5">
+      </div>
+      <div>
+        <label>Condizioni Pagamento (gg)</label>
+        <input type="number" id="rowPagamento">
+      </div>
+      <div>
+        <label>Copia gratuita</label>
+        <select id="rowCopiaGratuita"><option value=""></option><option>SI</option><option>NO</option></select>
+      </div>
+      <div>
+        <label>Resa</label>
+        <select id="rowResa"><option value=""></option><option>SI</option><option>NO</option><option>L</option></select>
+      </div>
+      <div>
+        <label>Note</label>
+        <input type="text" id="rowNote">
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="btn btn-primary" onclick="addEditoreRow()">+ Aggiungi riga</button>
+    </div>
+
+    <table style="margin-top:14px;">
+      <thead>
+        <tr>
+          <th>Descrizione Editore</th><th>Cod.</th><th>Generi</th><th>Sconto %</th>
+          <th>Pag. gg</th><th>Copia grat.</th><th>Resa</th><th>Note</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="editoriBody"></tbody>
+    </table>
+    <p class="small">Gli editori con <span class="badge-g1">G1</span> hanno il campo "Generi" precompilato e bloccato a 1, come da accordo commerciale (Guerini e Associati, Guerini Next, Raffaello Cortina, Cortina Med. e gli altri editori già marcati nel template PDE).</p>
+  </div>
+
+  <div class="card">
+    <h2>4. Esporta e invia</h2>
+    <div class="footer-actions">
+      <button class="btn btn-ghost" onclick="resetAll()">Svuota tutto</button>
+      <button class="btn btn-primary" onclick="exportXlsx()">⬇ Scarica modulo (.xlsx)</button>
+      <button class="btn btn-mail" onclick="sendMail()">✉ Invia mail a Messaggerie</button>
+    </div>
+    <p class="small">La mail si apre nel tuo client di posta con testo precompilato. Allega manualmente il file appena scaricato prima di inviare (i browser non permettono l'allegato automatico).</p>
+  </div>
+
+</div>
+
+</div>
+</div><!-- /appRoot -->
+
+<script>
+const SUPABASE_URL = 'https://tdflwenlylhctxssatax.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_fjL4LhUPmYMALh4kyhZUug_G_0Fl5fr';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function checkSession(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appRoot').style.display='block';
+  } else {
+    document.getElementById('loginScreen').style.display='flex';
+    document.getElementById('appRoot').style.display='none';
+  }
+}
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errBox = document.getElementById('loginErr');
+  errBox.textContent='';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ errBox.textContent = 'Credenziali non valide'; return; }
+  checkSession();
+}
+function doLogout(){
+  // logout locale: non invalida la sessione condivisa con le altre app PDE
+  localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`);
+  location.reload();
+}
+checkSession();
+</script>
+
+<script>
+const EDITORI = [{"nome": "ABOCA EDIZIONI", "codice": "B44", "genere1": false}, {"nome": "AD EST DELL'EQUATORE", "codice": "299", "genere1": false}, {"nome": "ADELPHI EDIZIONI", "codice": "A94", "genere1": false}, {"nome": "ALDENIA EDIZIONI", "codice": "290", "genere1": false}, {"nome": "ALPHA TEST", "codice": "305", "genere1": true}, {"nome": "ANGELO LONGO EDITORE", "codice": "012", "genere1": false}, {"nome": "ARGO EDITRICE SRLS", "codice": "103", "genere1": false}, {"nome": "ARKEIOS - ED. MEDITERRANEE", "codice": "934", "genere1": false}, {"nome": "AVAGLIANO EDITORE SRL", "codice": "386", "genere1": false}, {"nome": "BALDINI+CASTOLDI", "codice": "134", "genere1": false}, {"nome": "BEAT NERI POZZA", "codice": "738", "genere1": false}, {"nome": "BECCO GIALLO", "codice": "753", "genere1": false}, {"nome": "CAIRO BIS", "codice": "B14", "genere1": false}, {"nome": "CAIRO EDITORE", "codice": "A54", "genere1": false}, {"nome": "CAPRICORNO", "codice": "522", "genere1": true}, {"nome": "CARBONIO EDITORE", "codice": "662", "genere1": false}, {"nome": "CENTO AUTORI EDIZIONI", "codice": "747", "genere1": false}, {"nome": "CINETECA DI BOLOGNA", "codice": "532", "genere1": false}, {"nome": "CLEAN SCARL", "codice": "366", "genere1": false}, {"nome": "COLOMBO DUEMILA", "codice": "945", "genere1": false}, {"nome": "COLONNESE EDITORE", "codice": "137", "genere1": true}, {"nome": "CORTINA MED.", "codice": "456", "genere1": false}, {"nome": "DARIO CIMORELLI EDITORE", "codice": "D65", "genere1": false}, {"nome": "DEL VECCHIO", "codice": "072", "genere1": false}, {"nome": "DONZELLI EDITORE", "codice": "952", "genere1": false}, {"nome": "EDITORIALE GIORGIO MONDADORI", "codice": "A61", "genere1": false}, {"nome": "EDITRICE ANTENORE", "codice": "941", "genere1": false}, {"nome": "EDIZIONI AMRITA", "codice": "995", "genere1": false}, {"nome": "EDIZIONI CORSARE", "codice": "773", "genere1": true}, {"nome": "EDIZIONI DEDALO", "codice": "776", "genere1": false}, {"nome": "EDIZIONI DEL VERRI", "codice": "A58", "genere1": false}, {"nome": "EDIZIONI ETS", "codice": "037", "genere1": false}, {"nome": "EDIZIONI LAVORO", "codice": "064", "genere1": false}, {"nome": "EDIZIONI MEDITERRANEE", "codice": "058", "genere1": false}, {"nome": "EDIZIONI RIZA", "codice": "919", "genere1": false}, {"nome": "EFFIGI EDIZIONI", "codice": "692", "genere1": false}, {"nome": "ELEUTHERA EDITRICE", "codice": "138", "genere1": false}, {"nome": "EMMEBI EDIZIONI", "codice": "534", "genere1": false}, {"nome": "ESPRESS EDIZIONI", "codice": "A59", "genere1": false}, {"nome": "EUM CENTRO ED. UNIV. MACERATA", "codice": "296", "genere1": false}, {"nome": "FANDANGO LIBRI  SRL", "codice": "751", "genere1": false}, {"nome": "FAZI EDITORE S.R.L.", "codice": "112", "genere1": false}, {"nome": "FEDERIGHI EDITORI", "codice": "724", "genere1": true}, {"nome": "FUORI SCENA", "codice": "D92", "genere1": false}, {"nome": "FUTURA S.R.L.", "codice": "118", "genere1": false}, {"nome": "GALLUCCI BALLOON", "codice": "C85", "genere1": false}, {"nome": "GALLUCCI BROS", "codice": "C52", "genere1": false}, {"nome": "GALLUCCI CENTAURIA", "codice": "502", "genere1": false}, {"nome": "GALLUCCI EDITORE  SRL", "codice": "510", "genere1": false}, {"nome": "GALLUCCI SPIGA", "codice": "C48", "genere1": false}, {"nome": "GLIFI GALLUCCI", "codice": "AC7", "genere1": false}, {"nome": "GUERINI E ASSOCIATI", "codice": "B59", "genere1": true}, {"nome": "GUERINI NEXT", "codice": "B58", "genere1": true}, {"nome": "HARPERCOLLINS ITALIA", "codice": "763", "genere1": false}, {"nome": "HERMES - ED. MEDITERRANEE", "codice": "308", "genere1": false}, {"nome": "IGNAZIO PAPPALARDO EDITORE", "codice": "AC2", "genere1": false}, {"nome": "IL  SAGGIATORE", "codice": "428", "genere1": false}, {"nome": "IL PELLEGRINO EDITORE", "codice": "D95", "genere1": false}, {"nome": "ILISSO EDIZIONI", "codice": "937", "genere1": false}, {"nome": "IST.  ENCICLOP.  ITA. TRECCANI", "codice": "320", "genere1": false}, {"nome": "KALANDRAKA", "codice": "073", "genere1": false}, {"nome": "KENNESS PUBLISHING", "codice": "909", "genere1": false}, {"nome": "LA BIENNALE DI VENEZIA", "codice": "AI3", "genere1": false}, {"nome": "LA NAVE DI TESEO", "codice": "277", "genere1": false}, {"nome": "LA NAVE DI TESEO +", "codice": "A86", "genere1": false}, {"nome": "LA NAVE DI TESEO O", "codice": "B81", "genere1": false}, {"nome": "LA NUOVA FRONTIERA", "codice": "710", "genere1": true}, {"nome": "LA REVUE", "codice": "C72", "genere1": false}, {"nome": "LA SAPIENZA UNIV.STUDI ROMA", "codice": "108", "genere1": true}, {"nome": "LA TARTARUGA", "codice": "671", "genere1": false}, {"nome": "LAPIS EDIZIONI", "codice": "935", "genere1": false}, {"nome": "LAW CAMP - ALPHA TEST", "codice": "C79", "genere1": false}, {"nome": "LIBRIDO GALLUCCI", "codice": "333", "genere1": false}, {"nome": "LOG EDIZIONI", "codice": "B60", "genere1": false}, {"nome": "MANNI EDITORI", "codice": "465", "genere1": false}, {"nome": "MARLIN EDITORE", "codice": "780", "genere1": false}, {"nome": "MASSARI EDITORE", "codice": "347", "genere1": false}, {"nome": "METROPOLI D'ASIA", "codice": "854", "genere1": true}, {"nome": "MINIMUM FAX", "codice": "568", "genere1": false}, {"nome": "MOEBIUS", "codice": "AD6", "genere1": false}, {"nome": "MONTEPARMASERVIZI S.R.L.", "codice": "683", "genere1": false}, {"nome": "NERI POZZA", "codice": "735", "genere1": true}, {"nome": "NET", "codice": "515", "genere1": false}, {"nome": "NEXUS EDIZIONI", "codice": "A21", "genere1": false}, {"nome": "ON", "codice": "AL5", "genere1": false}, {"nome": "PAESI EDIZIONI", "codice": "A98", "genere1": false}, {"nome": "PLAYGROUND", "codice": "750", "genere1": false}, {"nome": "POLITI SEGANFREDDO S.R.L.", "codice": "D52", "genere1": false}, {"nome": "PRETEXT - CENTRO STUDI EDITORIA", "codice": "D80", "genere1": false}, {"nome": "RAFFAELLO CORTINA EDITORE", "codice": "455", "genere1": true}, {"nome": "RE NUDO EDITORE", "codice": "D71", "genere1": false}, {"nome": "RTI - RETI TELEVISIVE ITALIANE", "codice": "077", "genere1": false}, {"nome": "SAGGIATORE TASCABILI", "codice": "565", "genere1": false}, {"nome": "SCHNELL & STEINER", "codice": "795", "genere1": false}, {"nome": "SHAKE EDIZIONI", "codice": "468", "genere1": false}, {"nome": "SILLABE", "codice": "437", "genere1": false}, {"nome": "SILVANA EDITORIALE S.P.A. 821", "codice": "821", "genere1": true}, {"nome": "SIRONI - ALPHA TEST", "codice": "326", "genere1": false}, {"nome": "SKIRA EDITORE", "codice": "487", "genere1": false}, {"nome": "SOCIALMENTE", "codice": "152", "genere1": true}, {"nome": "SOLFERINO", "codice": "A60", "genere1": false}, {"nome": "STUDIO TESI - ED. MEDITERRANEE", "codice": "992", "genere1": false}, {"nome": "TIWI MINIBOMBO", "codice": "022", "genere1": false}, {"nome": "TRECCANI DEFINIZIONE", "codice": "C45", "genere1": true}, {"nome": "UMBERTO ALLEMANDI", "codice": "422", "genere1": false}, {"nome": "VERDECHIARO EDIZIONI", "codice": "524", "genere1": true}, {"nome": "VIELLA", "codice": "739", "genere1": false}];
+
+const selEditore = document.getElementById('selEditore');
+EDITORI.sort((a,b)=>a.nome.localeCompare(b.nome)).forEach(e=>{
+  const opt = document.createElement('option');
+  opt.value = e.codice; opt.textContent = e.nome + (e.genere1 ? '  [G1]' : '');
+  opt.dataset.nome = e.nome; opt.dataset.genere1 = e.genere1;
+  selEditore.appendChild(opt);
+});
+
+let clienti = [];
+let righeEditori = [];
+
+function addCliente(){
+  const cod = document.getElementById('cliCodice').value.trim();
+  const rag = document.getElementById('cliRagSoc').value.trim();
+  const loc = document.getElementById('cliLocalita').value.trim();
+  if(!rag){ alert('Inserisci almeno la Ragione Sociale'); return; }
+  clienti.push({cod, rag, loc});
+  document.getElementById('cliCodice').value='';
+  document.getElementById('cliRagSoc').value='';
+  document.getElementById('cliLocalita').value='';
+  renderClienti();
+}
+function removeCliente(i){ clienti.splice(i,1); renderClienti(); }
+function renderClienti(){
+  const box = document.getElementById('clientiList');
+  box.innerHTML = clienti.map((c,i)=>
+    `<span class="chip">${c.cod ? c.cod+' - ' : ''}${c.rag}${c.loc ? ' ('+c.loc+')' : ''}<button onclick="removeCliente(${i})">✕</button></span>`
+  ).join('');
+}
+
+function addEditoreRow(){
+  const opt = selEditore.selectedOptions[0];
+  if(!opt){ return; }
+  const isG1 = opt.dataset.genere1 === 'true';
+  righeEditori.push({
+    nome: opt.dataset.nome,
+    codice: opt.value,
+    genere: isG1 ? '1' : '',
+    sconto: document.getElementById('rowSconto').value,
+    pagamento: document.getElementById('rowPagamento').value,
+    copiaGratuita: document.getElementById('rowCopiaGratuita').value,
+    resa: document.getElementById('rowResa').value,
+    note: document.getElementById('rowNote').value
+  });
+  document.getElementById('rowSconto').value='';
+  document.getElementById('rowPagamento').value='';
+  document.getElementById('rowCopiaGratuita').value='';
+  document.getElementById('rowResa').value='';
+  document.getElementById('rowNote').value='';
+  renderEditori();
+}
+function removeRow(i){ righeEditori.splice(i,1); renderEditori(); }
+function renderEditori(){
+  const tb = document.getElementById('editoriBody');
+  tb.innerHTML = righeEditori.map((r,i)=>`
+    <tr>
+      <td>${r.nome}</td>
+      <td>${r.codice}</td>
+      <td>${r.genere ? '<span class="badge-g1">1</span>' : ''}</td>
+      <td>${r.sconto||''}</td>
+      <td>${r.pagamento||''}</td>
+      <td>${r.copiaGratuita||''}</td>
+      <td>${r.resa||''}</td>
+      <td>${r.note||''}</td>
+      <td><button class="btn btn-danger" onclick="removeRow(${i})">✕</button></td>
+    </tr>`).join('');
+}
+
+document.getElementById('logoInput').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const img = document.getElementById('logoPreview');
+    img.src = reader.result; img.style.display='inline-block';
+  };
+  reader.readAsDataURL(f);
+});
+
+function resetAll(){
+  if(!confirm('Svuotare tutti i dati inseriti?')) return;
+  clienti=[]; righeEditori=[]; renderClienti(); renderEditori();
+}
+
+async function exportXlsx(){
+  if(clienti.length===0){ alert('Aggiungi almeno un cliente'); return; }
+  if(righeEditori.length===0){ alert('Aggiungi almeno un editore'); return; }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('MODULO');
+  ws.properties.defaultRowHeight = 16;
+  ws.columns = [{width:30},{width:12},{width:10},{width:9},{width:14},{width:16},{width:13},{width:11},{width:22}];
+
+  // Logo
+  const logoImg = document.getElementById('logoPreview');
+  if(logoImg.src && logoImg.style.display !== 'none'){
+    const base64 = logoImg.src.split(',')[1];
+    const ext = logoImg.src.includes('image/png') ? 'png' : 'jpeg';
+    const imgId = wb.addImage({ base64: logoImg.src, extension: ext });
+    ws.addImage(imgId, 'A1:B3');
+  }
+
+  ws.mergeCells('D1:F1');
+  ws.getCell('D1').value = 'CONDIZIONI SPECIALI DI VENDITA';
+  ws.getCell('D1').font = {bold:true, size:14, color:{argb:'FF1A2D6B'}};
+  ws.getCell('D1').alignment = {horizontal:'center'};
+
+  ws.getCell('A6').value = 'Mittente';
+  ws.getCell('B6').value = document.getElementById('mittente').value;
+
+  const tipo = document.querySelector('input[name=tipo]:checked').value;
+  const data = document.getElementById('dataDecorrenza').value || '';
+  ws.getCell('A8').value = 'Tipo richiesta';
+  ws.getCell('B8').value = tipo;
+  ws.getCell('A9').value = (tipo==='Inserire' ? 'Inserire dal' : tipo==='Variare' ? 'Variare dal' : 'Eliminare dal');
+  ws.getCell('B9').value = data;
+
+  let r = 11;
+  ws.getCell(`A${r}`).value = 'Codice Cliente o Gruppo Cliente';
+  ws.getCell(`E${r}`).value = 'Rag. Sociale';
+  ws.getCell(`H${r}`).value = 'Località';
+  [`A${r}`,`E${r}`,`H${r}`].forEach(c=>{ws.getCell(c).font={bold:true};});
+  r++;
+  clienti.forEach(c=>{
+    ws.getCell(`A${r}`).value = c.cod;
+    ws.getCell(`E${r}`).value = c.rag;
+    ws.getCell(`H${r}`).value = c.loc;
+    r++;
+  });
+
+  r += 1;
+  const headers = ['Descrizione Editore','Cod. Editore','Divisione','Generi','Sconto Anagrafico %','Cond.ne di Pagamento gg','Copia gratuita SI/NO','RESA SI/NO/L','NOTE'];
+  headers.forEach((h,i)=>{
+    const cell = ws.getCell(r, i+1);
+    cell.value = h;
+    cell.font = {bold:true, color:{argb:'FFFFFFFF'}};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FF1A2D6B'}};
+  });
+  r++;
+  righeEditori.forEach(row=>{
+    ws.getCell(r,1).value = row.nome;
+    ws.getCell(r,2).value = row.codice;
+    ws.getCell(r,4).value = row.genere;
+    ws.getCell(r,5).value = row.sconto ? Number(row.sconto)/100 : '';
+    if(row.sconto) ws.getCell(r,5).numFmt = '0.0%';
+    ws.getCell(r,6).value = row.pagamento;
+    ws.getCell(r,7).value = row.copiaGratuita;
+    ws.getCell(r,8).value = row.resa;
+    ws.getCell(r,9).value = row.note;
+    r++;
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fname = `Condizioni_Commerciali_${(new Date()).toISOString().slice(0,10)}.xlsx`;
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function sendMail(){
+  const subject = encodeURIComponent('Variazione condizioni commerciali');
+  const body = encodeURIComponent('Buongiorno,\n\nallego file per variazione condizioni.\n\nGrazie');
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+</script>
+</body>
+</html>
