@@ -191,6 +191,17 @@
 
 </div>
 
+  <div class="card">
+    <h2>5. Storico richieste</h2>
+    <table>
+      <thead>
+        <tr><th>Data invio</th><th>Tipo</th><th>Decorrenza</th><th>Clienti</th><th>Editori</th><th>Utente</th><th></th></tr>
+      </thead>
+      <tbody id="storicoBody"></tbody>
+    </table>
+    <p class="small" id="storicoEmpty">Nessuna richiesta salvata finora.</p>
+  </div>
+
 </div>
 </div><!-- /appRoot -->
 
@@ -204,6 +215,7 @@ async function checkSession(){
   if(session){
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appRoot').style.display='block';
+    loadStorico();
   } else {
     document.getElementById('loginScreen').style.display='flex';
     document.getElementById('appRoot').style.display='none';
@@ -388,12 +400,66 @@ async function exportXlsx(){
   const fname = `Condizioni_Commerciali_${(new Date()).toISOString().slice(0,10)}.xlsx`;
   a.href = url; a.download = fname; a.click();
   URL.revokeObjectURL(url);
+
+  await salvaStorico(tipo, data);
+}
+
+async function salvaStorico(tipo, dataDecorrenza){
+  const { data:{ user } } = await sb.auth.getUser();
+  const payload = {
+    tipo_richiesta: tipo,
+    data_decorrenza: dataDecorrenza || null,
+    clienti: clienti,
+    editori: righeEditori,
+    utente_email: user ? user.email : null
+  };
+  const { error } = await sb.from('condizioni_richieste').insert(payload);
+  if(error){ console.error('Errore salvataggio storico:', error); }
+  loadStorico();
+}
+
+async function loadStorico(){
+  const { data, error } = await sb
+    .from('condizioni_richieste')
+    .select('*')
+    .order('created_at', { ascending:false })
+    .limit(30);
+  const body = document.getElementById('storicoBody');
+  const empty = document.getElementById('storicoEmpty');
+  if(error){ console.error('Errore lettura storico:', error); return; }
+  if(!data || data.length===0){ body.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  body.innerHTML = data.map(r=>{
+    const dt = new Date(r.created_at).toLocaleString('it-IT');
+    const cliStr = (r.clienti||[]).map(c=>c.rag).join(', ');
+    const edStr = (r.editori||[]).map(e=>e.nome).join(', ');
+    return `<tr>
+      <td>${dt}</td>
+      <td>${r.tipo_richiesta||''}</td>
+      <td>${r.data_decorrenza||''}</td>
+      <td>${cliStr}</td>
+      <td>${edStr}</td>
+      <td>${r.utente_email||''}</td>
+      <td><button class="btn btn-danger" onclick="deleteStorico(${r.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function deleteStorico(id){
+  if(!confirm('Eliminare questa richiesta dallo storico?')) return;
+  await sb.from('condizioni_richieste').delete().eq('id', id);
+  loadStorico();
 }
 
 function sendMail(){
   const subject = encodeURIComponent('Variazione condizioni commerciali');
   const body = encodeURIComponent('Buongiorno,\n\nallego file per variazione condizioni.\n\nGrazie');
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  if(clienti.length>0 && righeEditori.length>0){
+    const tipo = document.querySelector('input[name=tipo]:checked').value;
+    const data = document.getElementById('dataDecorrenza').value || '';
+    salvaStorico(tipo, data);
+  }
 }
 </script>
 </body>
