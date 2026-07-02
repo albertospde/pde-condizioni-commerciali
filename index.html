@@ -82,7 +82,7 @@
 
 <div class="wrap">
 
-  <div class="card">
+  <div class="card" style="display:none;">
     <h2>1. Tipo richiesta</h2>
     <div class="grid">
       <div>
@@ -379,6 +379,11 @@ async function exportXlsx(){
   URL.revokeObjectURL(url);
 
   await salvaStorico(tipo, data);
+
+  // Svuota la pagina dopo il download (la richiesta resta salvata nello storico)
+  clienti=[]; righeEditori=[]; renderClienti(); renderEditori();
+  document.getElementById('dataDecorrenza').value = '';
+  document.querySelector('input[name=tipo][value=Inserire]').checked = true;
 }
 
 async function salvaStorico(tipo, dataDecorrenza){
@@ -431,7 +436,7 @@ async function deleteStorico(id){
 function sendMail(){
   const subject = encodeURIComponent('Variazione condizioni commerciali');
   const body = encodeURIComponent('Buongiorno,\n\nallego file per variazione condizioni.\n\nGrazie');
-  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  window.location.href = `mailto:condizioni.commerciali@meli.it?subject=${subject}&body=${body}`;
   if(clienti.length>0 && righeEditori.length>0){
     const tipo = document.querySelector('input[name=tipo]:checked').value;
     const data = document.getElementById('dataDecorrenza').value || '';
