@@ -77,6 +77,17 @@
   details.cli-manual{margin-top:12px;}
   details.cli-manual summary{cursor:pointer;font-size:12px;color:var(--muted);}
   details.cli-manual .grid{margin-top:10px;}
+  /* Moduli in attesa */
+  .queue{display:flex;flex-direction:column;gap:8px;margin:4px 0 14px;}
+  .q-item{display:flex;align-items:flex-start;gap:12px;background:#11151c;border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:8px;padding:10px 12px;}
+  .q-num{background:var(--blue);color:#03222d;font-weight:700;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+  .q-body{flex:1;min-width:0;font-size:12.5px;line-height:1.5;}
+  .q-body b{color:var(--text);}
+  .q-body .muted{color:var(--muted);}
+  .q-actions{display:flex;gap:6px;flex-shrink:0;}
+  .q-actions .btn{padding:5px 10px;font-size:12px;}
+  .q-empty{font-size:12.5px;color:var(--muted);padding:10px 12px;border:1px dashed var(--line);border-radius:8px;margin:4px 0 14px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
   .ms-foot button{background:transparent;border:none;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;}
 </style>
 <style>
@@ -221,17 +232,18 @@
   </div>
 
   <div class="card">
-    <h2>3. Esporta e invia</h2>
-    <div class="radio-row" style="margin-bottom:12px;">
-      <label><input type="radio" name="modoFile" value="perCliente" checked> Un file per ciascun cliente</label>
-      <label><input type="radio" name="modoFile" value="unico"> Un unico file con tutti i clienti</label>
+    <h2>3. Moduli in attesa</h2>
+    <div class="footer-actions" style="justify-content:flex-start;margin-bottom:12px;">
+      <button class="btn btn-primary" onclick="addModulo()">＋ Crea modulo e metti in attesa</button>
+      <button class="btn btn-ghost" onclick="resetAll()">Svuota form</button>
     </div>
+    <div id="queueBox"></div>
     <div class="footer-actions">
-      <button class="btn btn-ghost" onclick="resetAll()">Svuota tutto</button>
-      <button class="btn btn-primary" onclick="exportXlsx()">⬇ Scarica modulo (.xlsx)</button>
-      <button class="btn btn-mail" onclick="sendMail()">✉ Invia mail a Messaggerie</button>
+      <button class="btn btn-ghost" id="btnSvuotaCoda" onclick="clearQueue()">Svuota moduli in attesa</button>
+      <button class="btn btn-primary" id="btnScarica" onclick="exportXlsx()">⬇ Scarica moduli</button>
+      <button class="btn btn-mail" onclick="sendMail()">✉ Crea mail a Messaggerie</button>
     </div>
-    <p class="small">La mail si apre nel tuo client di posta con testo precompilato. Allega manualmente il file appena scaricato prima di inviare (i browser non permettono l'allegato automatico).</p>
+    <p class="small">Compila clienti ed editori → "Crea modulo e metti in attesa" → ripeti per ogni modulo. Poi "Scarica moduli" scarica un file .xlsx per ciascun modulo; "Crea mail" apre la mail a Messaggerie a cui allegare tutti i file scaricati (i browser non permettono l'allegato automatico).</p>
   </div>
 
 </div>
@@ -280,7 +292,8 @@ function doLogout(){
   localStorage.removeItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`);
   location.reload();
 }
-checkSession();
+// Attendo il caricamento completo: loadStorico è definita nello script successivo
+window.addEventListener('DOMContentLoaded', checkSession);
 </script>
 
 <script>
@@ -425,6 +438,7 @@ document.addEventListener('click', e=>{
 
 function removeCliente(i){ clienti.splice(i,1); renderClienti(); }
 function renderClienti(){
+  if(typeof renderQueue==='function' && document.getElementById('queueBox')) setTimeout(renderQueue);
   const box = document.getElementById('clientiList');
   box.innerHTML = clienti.map((c,i)=>
     `<span class="chip">${c.cod ? escapeHtml(c.cod)+' - ' : ''}${escapeHtml(c.rag)}${c.loc ? ' ('+escapeHtml(c.loc)+')' : ''}<button onclick="removeCliente(${i})">✕</button></span>`
@@ -461,6 +475,7 @@ function clearRigheEditori(){
   righeEditori=[]; renderEditori();
 }
 function renderEditori(){
+  if(typeof renderQueue==='function' && document.getElementById('queueBox')) setTimeout(renderQueue);
   const tb = document.getElementById('editoriBody');
   tb.innerHTML = righeEditori.map((r,i)=>`
     <tr>
@@ -476,11 +491,17 @@ function renderEditori(){
     </tr>`).join('');
 }
 
-function resetAll(){
-  if(!confirm('Svuotare tutti i dati inseriti?')) return;
+function clearForm(){
   clienti=[]; righeEditori=[]; renderClienti(); renderEditori();
+  document.getElementById('dataDecorrenza').value = '';
+  document.querySelector('input[name=tipo][value=Inserire]').checked = true;
+}
+function resetAll(){
+  if(!confirm('Svuotare clienti ed editori del form? (i moduli in attesa restano)')) return;
+  clearForm();
 }
 
+let righeEditoriExport = [];
 async function buildWorkbook(listaClienti, tipo, data){
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('MODULO');
@@ -526,7 +547,7 @@ async function buildWorkbook(listaClienti, tipo, data){
     cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FF1A2D6B'}};
   });
   r++;
-  righeEditori.forEach(row=>{
+  righeEditoriExport.forEach(row=>{
     ws.getCell(r,1).value = row.nome;
     ws.getCell(r,2).value = row.codice;
     ws.getCell(r,4).value = row.genere;
@@ -550,48 +571,120 @@ function downloadBuffer(buf, fname){
   setTimeout(()=>URL.revokeObjectURL(url), 2000);
 }
 
-async function exportXlsx(){
-  if(clienti.length===0){ alert('Aggiungi almeno un cliente'); return; }
-  if(righeEditori.length===0){ alert('Aggiungi almeno un editore'); return; }
+// ===== Moduli in attesa =====
+const QUEUE_KEY = 'pde_cc_moduli_attesa';
+let moduli = [];
+try { moduli = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch(e){ moduli = []; }
+let ultimiScaricati = 0;
+function saveQueue(){ try { localStorage.setItem(QUEUE_KEY, JSON.stringify(moduli)); } catch(e){} }
 
-  const tipo = document.querySelector('input[name=tipo]:checked').value;
-  const data = document.getElementById('dataDecorrenza').value || '';
-  const perCliente = document.querySelector('input[name=modoFile]:checked').value === 'perCliente';
-  const oggi = (new Date()).toISOString().slice(0,10);
+function currentTipo(){ return document.querySelector('input[name=tipo]:checked').value; }
+function currentData(){ return document.getElementById('dataDecorrenza').value || ''; }
 
-  if(perCliente){
-    // Un file per cliente, con tutti gli editori/condizioni
-    for(const c of clienti){
-      const buf = await buildWorkbook([c], tipo, data);
-      const nome = `${c.cod ? c.cod+'_' : ''}${c.rag}`.replace(/[^\w\-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,60);
-      downloadBuffer(buf, `Condizioni_Commerciali_${nome}_${oggi}.xlsx`);
-      await new Promise(r=>setTimeout(r, 400)); // pausa tra i download: evita che il browser ne blocchi qualcuno
-    }
-  } else {
-    const buf = await buildWorkbook(clienti, tipo, data);
-    downloadBuffer(buf, `Condizioni_Commerciali_${oggi}.xlsx`);
-  }
-
-  await salvaStorico(tipo, data);
-
-  // Svuota la pagina dopo il download (la richiesta resta salvata nello storico)
-  clienti=[]; righeEditori=[]; renderClienti(); renderEditori();
-  document.getElementById('dataDecorrenza').value = '';
-  document.querySelector('input[name=tipo][value=Inserire]').checked = true;
+function addModulo(silent){
+  if(clienti.length===0){ alert('Aggiungi almeno un cliente'); return false; }
+  if(righeEditori.length===0){ alert('Aggiungi almeno un editore'); return false; }
+  moduli.push({
+    id: Date.now(),
+    tipo: currentTipo(),
+    data: currentData(),
+    clienti: JSON.parse(JSON.stringify(clienti)),
+    editori: JSON.parse(JSON.stringify(righeEditori))
+  });
+  saveQueue();
+  clearForm();
+  renderQueue();
+  if(!silent) document.getElementById('queueBox').scrollIntoView({behavior:'smooth', block:'center'});
+  return true;
+}
+function removeModulo(i){
+  if(!confirm('Eliminare questo modulo dalla coda?')) return;
+  moduli.splice(i,1); saveQueue(); renderQueue();
+}
+// Riporta il modulo nel form per modificarlo (lo toglie dalla coda: va rimesso in attesa dopo)
+function editModulo(i){
+  if((clienti.length || righeEditori.length) && !confirm('Il form contiene dati non messi in attesa: verranno sostituiti. Continuare?')) return;
+  const m = moduli.splice(i,1)[0];
+  clienti = m.clienti; righeEditori = m.editori;
+  document.getElementById('dataDecorrenza').value = m.data || '';
+  const r = document.querySelector(`input[name=tipo][value="${m.tipo}"]`); if(r) r.checked = true;
+  renderClienti(); renderEditori(); saveQueue(); renderQueue();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function clearQueue(){
+  if(moduli.length===0) return;
+  if(!confirm(`Eliminare tutti i ${moduli.length} moduli in attesa?`)) return;
+  moduli = []; saveQueue(); renderQueue();
+}
+function renderQueue(){
+  const box = document.getElementById('queueBox');
+  const btn = document.getElementById('btnScarica');
+  btn.textContent = moduli.length ? `⬇ Scarica moduli (${moduli.length})` : '⬇ Scarica moduli';
+  btn.disabled = moduli.length===0 && !(clienti.length && righeEditori.length);
+  document.getElementById('btnSvuotaCoda').style.display = moduli.length ? '' : 'none';
+  if(moduli.length===0){ box.innerHTML = '<div class="q-empty">Nessun modulo in attesa.</div>'; return; }
+  box.innerHTML = '<div class="queue">' + moduli.map((m,i)=>{
+    const cli = m.clienti.map(c=>escapeHtml(c.rag + (c.cod ? ` (${c.cod})` : ''))).join(', ');
+    const ed = m.editori.length > 4
+      ? escapeHtml(m.editori.slice(0,4).map(e=>e.nome).join(', ')) + ` <span class="muted">+ altri ${m.editori.length-4}</span>`
+      : escapeHtml(m.editori.map(e=>e.nome).join(', '));
+    const sconti = [...new Set(m.editori.map(e=>e.sconto).filter(Boolean))];
+    return `<div class="q-item">
+      <div class="q-num">${i+1}</div>
+      <div class="q-body">
+        <div><b>Clienti (${m.clienti.length}):</b> ${cli}</div>
+        <div><b>Editori (${m.editori.length}):</b> ${ed}</div>
+        <div class="muted">${sconti.length ? 'Sconto ' + sconti.map(x=>escapeHtml(x)+'%').join(' / ') : ''}${m.data ? ' · dal ' + escapeHtml(m.data) : ''}</div>
+      </div>
+      <div class="q-actions">
+        <button class="btn btn-ghost" onclick="editModulo(${i})">Modifica</button>
+        <button class="btn btn-danger" onclick="removeModulo(${i})">✕</button>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
 }
 
-async function salvaStorico(tipo, dataDecorrenza){
+function nomeFileModulo(m, idx, tot){
+  const oggi = (new Date()).toISOString().slice(0,10);
+  const c = m.clienti[0];
+  let base = `${c.cod ? c.cod+'_' : ''}${c.rag}`;
+  if(m.clienti.length > 1) base += `_e_altri_${m.clienti.length-1}`;
+  base = base.replace(/[^\w\-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,60);
+  const n = tot > 1 ? `${String(idx+1).padStart(2,'0')}_` : '';
+  return `Condizioni_Commerciali_${n}${base}_${oggi}.xlsx`;
+}
+
+async function exportXlsx(){
+  // Se nel form c'è un modulo completo non ancora messo in attesa, lo aggiungo in automatico
+  if(clienti.length && righeEditori.length){ addModulo(true); }
+  if(moduli.length===0){ alert('Nessun modulo in attesa: compila clienti ed editori e clicca "Crea modulo e metti in attesa".'); return; }
+
+  const daScaricare = [...moduli];
+  for(let k=0; k<daScaricare.length; k++){
+    const m = daScaricare[k];
+    righeEditoriExport = m.editori;
+    const buf = await buildWorkbook(m.clienti, m.tipo, m.data);
+    downloadBuffer(buf, nomeFileModulo(m, k, daScaricare.length));
+    await salvaStorico(m);
+    await new Promise(r=>setTimeout(r, 400)); // pausa tra i download: evita che il browser ne blocchi qualcuno
+  }
+  ultimiScaricati = daScaricare.length;
+  moduli = []; saveQueue(); renderQueue();
+  loadStorico();
+  alert(`Scaricati ${daScaricare.length} moduli. Ora clicca "Crea mail a Messaggerie" e allega i file.`);
+}
+
+async function salvaStorico(m){
   const { data:{ user } } = await sb.auth.getUser();
   const payload = {
-    tipo_richiesta: tipo,
-    data_decorrenza: dataDecorrenza || null,
-    clienti: clienti,
-    editori: righeEditori,
+    tipo_richiesta: m.tipo,
+    data_decorrenza: m.data || null,
+    clienti: m.clienti,
+    editori: m.editori,
     utente_email: user ? user.email : null
   };
   const { error } = await sb.from('condizioni_richieste').insert(payload);
   if(error){ console.error('Errore salvataggio storico:', error); }
-  loadStorico();
 }
 
 async function loadStorico(){
@@ -629,14 +722,12 @@ async function deleteStorico(id){
 
 function sendMail(){
   const subject = encodeURIComponent('Variazione condizioni commerciali');
-  const body = encodeURIComponent('Buongiorno,\n\nallego file per variazione condizioni.\n\nGrazie');
+  if(moduli.length > 0 && !confirm(`Hai ancora ${moduli.length} moduli in attesa non scaricati. Aprire comunque la mail?`)) return;
+  const txt = ultimiScaricati > 1 ? `allego i ${ultimiScaricati} file per variazione condizioni.` : 'allego file per variazione condizioni.';
+  const body = encodeURIComponent(`Buongiorno,\n\n${txt}\n\nGrazie`);
   window.location.href = `mailto:condizioni.commerciali@meli.it?subject=${subject}&body=${body}`;
-  if(clienti.length>0 && righeEditori.length>0){
-    const tipo = document.querySelector('input[name=tipo]:checked').value;
-    const data = document.getElementById('dataDecorrenza').value || '';
-    salvaStorico(tipo, data);
-  }
 }
+renderQueue();
 </script>
 </body>
 </html>
