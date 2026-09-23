@@ -47,6 +47,22 @@
   .badge-g1{background:#3a3110;color:#f4c430;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;}
   select[disabled]{background:#11151c;color:#5a6377;}
   option{background:#0d1117;color:var(--text);}
+  /* Tendina multi-selezione editori */
+  .ms{position:relative;}
+  .ms-btn{width:100%;text-align:left;padding:8px 28px 8px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#0d1117;color:var(--text);cursor:pointer;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ms-btn::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);}
+  .ms.open .ms-btn{outline:2px solid var(--blue);border-color:var(--blue);}
+  .ms-panel{display:none;position:absolute;z-index:50;top:calc(100% + 4px);left:0;width:max(100%,340px);background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:8px;}
+  .ms.open .ms-panel{display:block;}
+  .ms-search{margin-bottom:6px;}
+  .ms-all{display:flex;align-items:center;gap:8px;padding:6px 6px;border-bottom:1px solid var(--line);margin-bottom:4px;font-size:13px;font-weight:700;color:var(--blue);cursor:pointer;}
+  .ms-list{max-height:260px;overflow-y:auto;}
+  .ms-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;font-size:12.5px;cursor:pointer;color:var(--text);font-weight:400;margin:0;}
+  .ms-item:hover{background:#1b212c;}
+  .ms-all input,.ms-item input{width:auto;margin:0;accent-color:var(--blue);}
+  .ms-item .cod{color:var(--muted);font-size:11px;margin-left:auto;}
+  .ms-foot{display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid var(--line);margin-top:4px;font-size:11px;color:var(--muted);}
+  .ms-foot button{background:transparent;border:none;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;}
 </style>
 <style>
   #loginScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;}
@@ -130,8 +146,16 @@
     <h2>2. Editori e condizioni</h2>
     <div class="grid">
       <div>
-        <label>Editore</label>
-        <select id="selEditore"></select>
+        <label>Editori</label>
+        <div class="ms" id="msEditori">
+          <button type="button" class="ms-btn" id="msBtn" onclick="toggleMs()">Seleziona editori…</button>
+          <div class="ms-panel">
+            <input type="text" class="ms-search" id="msSearch" placeholder="Cerca editore o codice…" oninput="renderMsList()">
+            <label class="ms-all"><input type="checkbox" id="msAll" onchange="toggleAllEditori(this.checked)"> <span id="msAllLbl">Seleziona tutti</span></label>
+            <div class="ms-list" id="msList"></div>
+            <div class="ms-foot"><span id="msCount">0 selezionati</span><button type="button" onclick="toggleMs(false)">Fatto</button></div>
+          </div>
+        </div>
       </div>
       <div>
         <label>Sconto Anagrafico %</label>
@@ -155,7 +179,8 @@
       </div>
     </div>
     <div class="row-actions">
-      <button class="btn btn-primary" onclick="addEditoreRow()">+ Aggiungi riga</button>
+      <button class="btn btn-primary" onclick="addEditoreRow()">+ Aggiungi agli editori selezionati</button>
+      <button class="btn btn-ghost" onclick="clearRigheEditori()">Svuota righe editori</button>
     </div>
 
     <table style="margin-top:14px;">
@@ -234,13 +259,54 @@ const MESSAGGERIE_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAiwAAABb
 
 const EDITORI = [{"nome": "ABOCA EDIZIONI", "codice": "B44", "genere1": false}, {"nome": "AD EST DELL'EQUATORE", "codice": "299", "genere1": false}, {"nome": "ADELPHI EDIZIONI", "codice": "A94", "genere1": false}, {"nome": "ALDENIA EDIZIONI", "codice": "290", "genere1": false}, {"nome": "ALPHA TEST", "codice": "305", "genere1": true}, {"nome": "ANGELO LONGO EDITORE", "codice": "012", "genere1": false}, {"nome": "ARGO EDITRICE SRLS", "codice": "103", "genere1": false}, {"nome": "ARKEIOS - ED. MEDITERRANEE", "codice": "934", "genere1": false}, {"nome": "AVAGLIANO EDITORE SRL", "codice": "386", "genere1": false}, {"nome": "BALDINI+CASTOLDI", "codice": "134", "genere1": false}, {"nome": "BEAT NERI POZZA", "codice": "738", "genere1": false}, {"nome": "BECCO GIALLO", "codice": "753", "genere1": false}, {"nome": "CAIRO BIS", "codice": "B14", "genere1": false}, {"nome": "CAIRO EDITORE", "codice": "A54", "genere1": false}, {"nome": "CAPRICORNO", "codice": "522", "genere1": true}, {"nome": "CARBONIO EDITORE", "codice": "662", "genere1": false}, {"nome": "CENTO AUTORI EDIZIONI", "codice": "747", "genere1": false}, {"nome": "CINETECA DI BOLOGNA", "codice": "532", "genere1": false}, {"nome": "CLEAN SCARL", "codice": "366", "genere1": false}, {"nome": "COLOMBO DUEMILA", "codice": "945", "genere1": false}, {"nome": "COLONNESE EDITORE", "codice": "137", "genere1": true}, {"nome": "CORTINA MED.", "codice": "456", "genere1": false}, {"nome": "DARIO CIMORELLI EDITORE", "codice": "D65", "genere1": false}, {"nome": "DEL VECCHIO", "codice": "072", "genere1": false}, {"nome": "DONZELLI EDITORE", "codice": "952", "genere1": false}, {"nome": "EDITORIALE GIORGIO MONDADORI", "codice": "A61", "genere1": false}, {"nome": "EDITRICE ANTENORE", "codice": "941", "genere1": false}, {"nome": "EDIZIONI AMRITA", "codice": "995", "genere1": false}, {"nome": "EDIZIONI CORSARE", "codice": "773", "genere1": true}, {"nome": "EDIZIONI DEDALO", "codice": "776", "genere1": false}, {"nome": "EDIZIONI DEL VERRI", "codice": "A58", "genere1": false}, {"nome": "EDIZIONI ETS", "codice": "037", "genere1": false}, {"nome": "EDIZIONI LAVORO", "codice": "064", "genere1": false}, {"nome": "EDIZIONI MEDITERRANEE", "codice": "058", "genere1": false}, {"nome": "EDIZIONI RIZA", "codice": "919", "genere1": false}, {"nome": "EFFIGI EDIZIONI", "codice": "692", "genere1": false}, {"nome": "ELEUTHERA EDITRICE", "codice": "138", "genere1": false}, {"nome": "EMMEBI EDIZIONI", "codice": "534", "genere1": false}, {"nome": "ESPRESS EDIZIONI", "codice": "A59", "genere1": false}, {"nome": "EUM CENTRO ED. UNIV. MACERATA", "codice": "296", "genere1": false}, {"nome": "FANDANGO LIBRI  SRL", "codice": "751", "genere1": false}, {"nome": "FAZI EDITORE S.R.L.", "codice": "112", "genere1": false}, {"nome": "FEDERIGHI EDITORI", "codice": "724", "genere1": true}, {"nome": "FUORI SCENA", "codice": "D92", "genere1": false}, {"nome": "FUTURA S.R.L.", "codice": "118", "genere1": false}, {"nome": "GALLUCCI BALLOON", "codice": "C85", "genere1": false}, {"nome": "GALLUCCI BROS", "codice": "C52", "genere1": false}, {"nome": "GALLUCCI CENTAURIA", "codice": "502", "genere1": false}, {"nome": "GALLUCCI EDITORE  SRL", "codice": "510", "genere1": false}, {"nome": "GALLUCCI SPIGA", "codice": "C48", "genere1": false}, {"nome": "GLIFI GALLUCCI", "codice": "AC7", "genere1": false}, {"nome": "GUERINI E ASSOCIATI", "codice": "B59", "genere1": true}, {"nome": "GUERINI NEXT", "codice": "B58", "genere1": true}, {"nome": "HARPERCOLLINS ITALIA", "codice": "763", "genere1": false}, {"nome": "HERMES - ED. MEDITERRANEE", "codice": "308", "genere1": false}, {"nome": "IGNAZIO PAPPALARDO EDITORE", "codice": "AC2", "genere1": false}, {"nome": "IL  SAGGIATORE", "codice": "428", "genere1": false}, {"nome": "IL PELLEGRINO EDITORE", "codice": "D95", "genere1": false}, {"nome": "ILISSO EDIZIONI", "codice": "937", "genere1": false}, {"nome": "IST.  ENCICLOP.  ITA. TRECCANI", "codice": "320", "genere1": false}, {"nome": "KALANDRAKA", "codice": "073", "genere1": false}, {"nome": "KENNESS PUBLISHING", "codice": "909", "genere1": false}, {"nome": "LA BIENNALE DI VENEZIA", "codice": "AI3", "genere1": false}, {"nome": "LA NAVE DI TESEO", "codice": "277", "genere1": false}, {"nome": "LA NAVE DI TESEO +", "codice": "A86", "genere1": false}, {"nome": "LA NAVE DI TESEO O", "codice": "B81", "genere1": false}, {"nome": "LA NUOVA FRONTIERA", "codice": "710", "genere1": true}, {"nome": "LA REVUE", "codice": "C72", "genere1": false}, {"nome": "LA SAPIENZA UNIV.STUDI ROMA", "codice": "108", "genere1": true}, {"nome": "LA TARTARUGA", "codice": "671", "genere1": false}, {"nome": "LAPIS EDIZIONI", "codice": "935", "genere1": false}, {"nome": "LAW CAMP - ALPHA TEST", "codice": "C79", "genere1": false}, {"nome": "LIBRIDO GALLUCCI", "codice": "333", "genere1": false}, {"nome": "LOG EDIZIONI", "codice": "B60", "genere1": false}, {"nome": "MANNI EDITORI", "codice": "465", "genere1": false}, {"nome": "MARLIN EDITORE", "codice": "780", "genere1": false}, {"nome": "MASSARI EDITORE", "codice": "347", "genere1": false}, {"nome": "METROPOLI D'ASIA", "codice": "854", "genere1": true}, {"nome": "MINIMUM FAX", "codice": "568", "genere1": false}, {"nome": "MOEBIUS", "codice": "AD6", "genere1": false}, {"nome": "MONTEPARMASERVIZI S.R.L.", "codice": "683", "genere1": false}, {"nome": "NERI POZZA", "codice": "735", "genere1": true}, {"nome": "NET", "codice": "515", "genere1": false}, {"nome": "NEXUS EDIZIONI", "codice": "A21", "genere1": false}, {"nome": "ON", "codice": "AL5", "genere1": false}, {"nome": "PAESI EDIZIONI", "codice": "A98", "genere1": false}, {"nome": "PLAYGROUND", "codice": "750", "genere1": false}, {"nome": "POLITI SEGANFREDDO S.R.L.", "codice": "D52", "genere1": false}, {"nome": "PRETEXT - CENTRO STUDI EDITORIA", "codice": "D80", "genere1": false}, {"nome": "RAFFAELLO CORTINA EDITORE", "codice": "455", "genere1": true}, {"nome": "RE NUDO EDITORE", "codice": "D71", "genere1": false}, {"nome": "RTI - RETI TELEVISIVE ITALIANE", "codice": "077", "genere1": false}, {"nome": "SAGGIATORE TASCABILI", "codice": "565", "genere1": false}, {"nome": "SCHNELL & STEINER", "codice": "795", "genere1": false}, {"nome": "SHAKE EDIZIONI", "codice": "468", "genere1": false}, {"nome": "SILLABE", "codice": "437", "genere1": false}, {"nome": "SILVANA EDITORIALE S.P.A. 821", "codice": "821", "genere1": true}, {"nome": "SIRONI - ALPHA TEST", "codice": "326", "genere1": false}, {"nome": "SKIRA EDITORE", "codice": "487", "genere1": false}, {"nome": "SOCIALMENTE", "codice": "152", "genere1": true}, {"nome": "SOLFERINO", "codice": "A60", "genere1": false}, {"nome": "STUDIO TESI - ED. MEDITERRANEE", "codice": "992", "genere1": false}, {"nome": "TIWI MINIBOMBO", "codice": "022", "genere1": false}, {"nome": "TRECCANI DEFINIZIONE", "codice": "C45", "genere1": true}, {"nome": "UMBERTO ALLEMANDI", "codice": "422", "genere1": false}, {"nome": "VERDECHIARO EDIZIONI", "codice": "524", "genere1": true}, {"nome": "VIELLA", "codice": "739", "genere1": false}];
 
-const selEditore = document.getElementById('selEditore');
-EDITORI.sort((a,b)=>a.nome.localeCompare(b.nome)).forEach(e=>{
-  const opt = document.createElement('option');
-  opt.value = e.codice; opt.textContent = e.nome + (e.genere1 ? '  [G1]' : '');
-  opt.dataset.nome = e.nome; opt.dataset.genere1 = e.genere1;
-  selEditore.appendChild(opt);
+EDITORI.sort((a,b)=>a.nome.localeCompare(b.nome));
+const selEditori = new Set(); // codici selezionati
+
+function toggleMs(force){
+  const ms = document.getElementById('msEditori');
+  const open = typeof force==='boolean' ? force : !ms.classList.contains('open');
+  ms.classList.toggle('open', open);
+  if(open){ document.getElementById('msSearch').focus(); }
+}
+document.addEventListener('click', e=>{
+  const ms = document.getElementById('msEditori');
+  if(ms && !ms.contains(e.target)) ms.classList.remove('open');
 });
+function filteredEditori(){
+  const q = document.getElementById('msSearch').value.trim().toLowerCase();
+  return q ? EDITORI.filter(e=>e.nome.toLowerCase().includes(q) || String(e.codice).toLowerCase().includes(q)) : EDITORI;
+}
+function renderMsList(){
+  const list = filteredEditori();
+  document.getElementById('msList').innerHTML = list.map(e=>`
+    <label class="ms-item"><input type="checkbox" value="${e.codice}" ${selEditori.has(e.codice)?'checked':''} onchange="toggleEditore(this.value,this.checked)">
+      ${e.nome}${e.genere1?' <span class="badge-g1">G1</span>':''}<span class="cod">${e.codice}</span></label>`).join('')
+    || '<div class="small" style="padding:6px;">Nessun editore trovato</div>';
+  updateMsState();
+}
+function toggleEditore(cod, on){ on ? selEditori.add(cod) : selEditori.delete(cod); updateMsState(); }
+// "Seleziona tutti" agisce sugli editori visibili (tutti, o quelli filtrati dalla ricerca)
+function toggleAllEditori(on){
+  filteredEditori().forEach(e=> on ? selEditori.add(e.codice) : selEditori.delete(e.codice));
+  renderMsList();
+}
+function updateMsState(){
+  const list = filteredEditori();
+  const nSel = list.filter(e=>selEditori.has(e.codice)).length;
+  const all = document.getElementById('msAll');
+  all.checked = list.length>0 && nSel===list.length;
+  all.indeterminate = nSel>0 && nSel<list.length;
+  const filtered = document.getElementById('msSearch').value.trim() !== '';
+  document.getElementById('msAllLbl').textContent = filtered ? `Seleziona tutti i risultati (${list.length})` : `Seleziona tutti (${EDITORI.length})`;
+  document.getElementById('msCount').textContent = `${selEditori.size} selezionati su ${EDITORI.length}`;
+  const btn = document.getElementById('msBtn');
+  if(selEditori.size===0) btn.textContent = 'Seleziona editori…';
+  else if(selEditori.size===EDITORI.length) btn.textContent = `Tutti gli editori (${EDITORI.length})`;
+  else if(selEditori.size===1) btn.textContent = EDITORI.find(e=>e.codice===[...selEditori][0]).nome;
+  else btn.textContent = `${selEditori.size} editori selezionati`;
+}
+function clearSelezioneEditori(){ selEditori.clear(); document.getElementById('msSearch').value=''; renderMsList(); }
+renderMsList();
 
 let clienti = [];
 let righeEditori = [];
@@ -265,19 +331,21 @@ function renderClienti(){
 }
 
 function addEditoreRow(){
-  const opt = selEditore.selectedOptions[0];
-  if(!opt){ return; }
-  const isG1 = opt.dataset.genere1 === 'true';
-  righeEditori.push({
-    nome: opt.dataset.nome,
-    codice: opt.value,
-    genere: isG1 ? '1' : '',
+  if(selEditori.size===0){ alert('Seleziona almeno un editore'); return; }
+  const cond = {
     sconto: document.getElementById('rowSconto').value,
     pagamento: document.getElementById('rowPagamento').value,
     copiaGratuita: document.getElementById('rowCopiaGratuita').value,
     resa: document.getElementById('rowResa').value,
     note: document.getElementById('rowNote').value
+  };
+  // Stesse condizioni applicate a tutti gli editori selezionati; se un editore è già in tabella la sua riga viene aggiornata
+  EDITORI.filter(e=>selEditori.has(e.codice)).forEach(e=>{
+    const row = { nome: e.nome, codice: e.codice, genere: e.genere1 ? '1' : '', ...cond };
+    const idx = righeEditori.findIndex(r=>r.codice===e.codice);
+    if(idx>=0) righeEditori[idx] = row; else righeEditori.push(row);
   });
+  clearSelezioneEditori();
   document.getElementById('rowSconto').value='';
   document.getElementById('rowPagamento').value='';
   document.getElementById('rowCopiaGratuita').value='';
@@ -286,6 +354,11 @@ function addEditoreRow(){
   renderEditori();
 }
 function removeRow(i){ righeEditori.splice(i,1); renderEditori(); }
+function clearRigheEditori(){
+  if(righeEditori.length===0) return;
+  if(!confirm('Eliminare tutte le righe editori?')) return;
+  righeEditori=[]; renderEditori();
+}
 function renderEditori(){
   const tb = document.getElementById('editoriBody');
   tb.innerHTML = righeEditori.map((r,i)=>`
