@@ -62,6 +62,21 @@
   .ms-all input,.ms-item input{width:auto;margin:0;accent-color:var(--blue);}
   .ms-item .cod{color:var(--muted);font-size:11px;margin-left:auto;}
   .ms-foot{display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid var(--line);margin-top:4px;font-size:11px;color:var(--muted);}
+  /* Ricerca clienti (come BookUp) */
+  .cli-search{position:relative;max-width:560px;}
+  .cli-search input{padding-right:34px;}
+  .cli-spin{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;display:none;}
+  .dropdown-results{display:none;position:absolute;z-index:60;top:calc(100% + 4px);left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:320px;overflow-y:auto;}
+  .dropdown-results.show{display:block;}
+  .dropdown-item{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;}
+  .dropdown-item:last-child{border-bottom:none;}
+  .dropdown-item:hover,.dropdown-item.active{background:#1b2a36;}
+  .dropdown-item .sub{color:var(--muted);font-size:12px;}
+  .dropdown-item.added{opacity:.5;cursor:default;}
+  .dropdown-empty{padding:10px 12px;font-size:13px;color:var(--muted);}
+  details.cli-manual{margin-top:12px;}
+  details.cli-manual summary{cursor:pointer;font-size:12px;color:var(--muted);}
+  details.cli-manual .grid{margin-top:10px;}
   .ms-foot button{background:transparent;border:none;color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;}
 </style>
 <style>
@@ -115,30 +130,40 @@
       </div>
       <div>
         <label>Mittente</label>
-        <input type="text" id="mittente" value="PDE - Promozione Distribuzione Editoriale" disabled>
+        <input type="text" id="mittente" value="PDE Promozione" disabled>
       </div>
     </div>
   </div>
 
   <div class="card">
     <h2>1. Clienti / Punti vendita <span class="small">(stesse condizioni applicate a più clienti contemporaneamente)</span></h2>
-    <div class="grid">
-      <div>
-        <label>Codice Cliente / Gruppo</label>
-        <input type="text" id="cliCodice" placeholder="es. 2424601">
-      </div>
-      <div>
-        <label>Ragione Sociale</label>
-        <input type="text" id="cliRagSoc" placeholder="es. CRISTIANO LIBRI SRL">
-      </div>
-      <div>
-        <label>Località</label>
-        <input type="text" id="cliLocalita" placeholder="es. Milano">
-      </div>
+    <label>Nome libreria o codice cliente</label>
+    <div class="cli-search">
+      <input type="text" id="cliSearch" placeholder="Scrivi il nome della libreria o il codice cliente..." autocomplete="off">
+      <span class="cli-spin" id="cliSpin">…</span>
+      <div id="cliDropdown" class="dropdown-results"></div>
     </div>
-    <div class="row-actions">
-      <button class="btn btn-primary" onclick="addCliente()">+ Aggiungi cliente</button>
-    </div>
+    <p class="small">Clicca un risultato per aggiungerlo: puoi aggiungere più clienti uno dopo l'altro.</p>
+    <details class="cli-manual">
+      <summary>Cliente non trovato o codice gruppo? Inseriscilo a mano</summary>
+      <div class="grid">
+        <div>
+          <label>Codice Cliente / Gruppo</label>
+          <input type="text" id="cliCodice" placeholder="es. 2424601">
+        </div>
+        <div>
+          <label>Ragione Sociale</label>
+          <input type="text" id="cliRagSoc" placeholder="es. CRISTIANO LIBRI SRL">
+        </div>
+        <div>
+          <label>Località</label>
+          <input type="text" id="cliLocalita" placeholder="es. Milano">
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-ghost" onclick="addCliente()">+ Aggiungi manualmente</button>
+      </div>
+    </details>
     <div class="chip-list" id="clientiList"></div>
   </div>
 
@@ -197,6 +222,10 @@
 
   <div class="card">
     <h2>3. Esporta e invia</h2>
+    <div class="radio-row" style="margin-bottom:12px;">
+      <label><input type="radio" name="modoFile" value="perCliente" checked> Un file per ciascun cliente</label>
+      <label><input type="radio" name="modoFile" value="unico"> Un unico file con tutti i clienti</label>
+    </div>
     <div class="footer-actions">
       <button class="btn btn-ghost" onclick="resetAll()">Svuota tutto</button>
       <button class="btn btn-primary" onclick="exportXlsx()">⬇ Scarica modulo (.xlsx)</button>
@@ -322,11 +351,83 @@ function addCliente(){
   document.getElementById('cliLocalita').value='';
   renderClienti();
 }
+// --- Ricerca clienti su RPN via edge function rpn-sync (stessa logica di BookUp) ---
+const RPN_PROXY_BASE = `${SUPABASE_URL}/functions/v1/rpn-sync`;
+async function rpnApiCall(path){
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session ? session.access_token : SUPABASE_ANON_KEY;
+  const res = await fetch(`${RPN_PROXY_BASE}/${path}`, { headers:{ 'Authorization':`Bearer ${token}`, 'Content-Type':'application/json' } });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.message || data.error || `Errore ${res.status}`);
+  return data;
+}
+function escapeHtml(t){ return String(t??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+let lastCliMatches = [];
+let cliActive = -1;
+let cliReqId = 0; // scarta risposte arrivate fuori ordine
+async function onCliSearch(){
+  const q = document.getElementById('cliSearch').value.trim();
+  const dd = document.getElementById('cliDropdown');
+  const spin = document.getElementById('cliSpin');
+  if(q.length < 2){ dd.classList.remove('show'); return; }
+  const myId = ++cliReqId;
+  spin.style.display = 'block';
+  try{
+    const data = await rpnApiCall(`librerie?query=${encodeURIComponent(q)}`);
+    if(myId !== cliReqId) return;
+    const raw = Array.isArray(data) ? data : (data.results || []);
+    lastCliMatches = raw.map(r=>({ code: r.code || '', name: r.name || '(senza nome)', city: r.city || '' })).slice(0, 10);
+    cliActive = -1;
+    renderCliDropdown();
+  }catch(err){
+    if(myId !== cliReqId) return;
+    dd.innerHTML = `<div class="dropdown-empty" style="color:#ff8a8a;">Errore nella ricerca: ${escapeHtml(err.message)}</div>`;
+    dd.classList.add('show');
+  }finally{
+    if(myId === cliReqId) spin.style.display = 'none';
+  }
+}
+function renderCliDropdown(){
+  const dd = document.getElementById('cliDropdown');
+  if(!lastCliMatches.length){ dd.innerHTML = '<div class="dropdown-empty">Nessuna libreria trovata.</div>'; dd.classList.add('show'); return; }
+  dd.innerHTML = lastCliMatches.map((r,i)=>{
+    const added = clienti.some(c=>c.cod && c.cod===r.code);
+    return `<div class="dropdown-item${added?' added':''}${i===cliActive?' active':''}" onclick="selectCliente(${i})">
+      ${escapeHtml(r.name)}${added?' ✓':''}<br><span class="sub">${escapeHtml(r.code)} · ${escapeHtml(r.city)}</span></div>`;
+  }).join('');
+  dd.classList.add('show');
+}
+// Indice nell'onclick (non il nome) per non rompersi con gli apostrofi
+function selectCliente(i){
+  const r = lastCliMatches[i];
+  if(!r) return;
+  if(clienti.some(c=>c.cod && c.cod===r.code)) return;
+  clienti.push({ cod: r.code, rag: r.name, loc: r.city });
+  renderClienti();
+  const inp = document.getElementById('cliSearch');
+  inp.value = ''; inp.focus();
+  document.getElementById('cliDropdown').classList.remove('show');
+}
+document.getElementById('cliSearch').addEventListener('input', debounce(onCliSearch, 350));
+document.getElementById('cliSearch').addEventListener('keydown', e=>{
+  const dd = document.getElementById('cliDropdown');
+  if(!dd.classList.contains('show') || !lastCliMatches.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); cliActive = Math.min(cliActive+1, lastCliMatches.length-1); renderCliDropdown(); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); cliActive = Math.max(cliActive-1, 0); renderCliDropdown(); }
+  else if(e.key==='Enter'){ e.preventDefault(); selectCliente(cliActive>=0 ? cliActive : 0); }
+  else if(e.key==='Escape'){ dd.classList.remove('show'); }
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.cli-search')) document.getElementById('cliDropdown').classList.remove('show');
+});
+
 function removeCliente(i){ clienti.splice(i,1); renderClienti(); }
 function renderClienti(){
   const box = document.getElementById('clientiList');
   box.innerHTML = clienti.map((c,i)=>
-    `<span class="chip">${c.cod ? c.cod+' - ' : ''}${c.rag}${c.loc ? ' ('+c.loc+')' : ''}<button onclick="removeCliente(${i})">✕</button></span>`
+    `<span class="chip">${c.cod ? escapeHtml(c.cod)+' - ' : ''}${escapeHtml(c.rag)}${c.loc ? ' ('+escapeHtml(c.loc)+')' : ''}<button onclick="removeCliente(${i})">✕</button></span>`
   ).join('');
 }
 
@@ -380,10 +481,7 @@ function resetAll(){
   clienti=[]; righeEditori=[]; renderClienti(); renderEditori();
 }
 
-async function exportXlsx(){
-  if(clienti.length===0){ alert('Aggiungi almeno un cliente'); return; }
-  if(righeEditori.length===0){ alert('Aggiungi almeno un editore'); return; }
-
+async function buildWorkbook(listaClienti, tipo, data){
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('MODULO');
   ws.properties.defaultRowHeight = 16;
@@ -401,8 +499,6 @@ async function exportXlsx(){
   ws.getCell('A6').value = 'Mittente';
   ws.getCell('B6').value = document.getElementById('mittente').value;
 
-  const tipo = document.querySelector('input[name=tipo]:checked').value;
-  const data = document.getElementById('dataDecorrenza').value || '';
   ws.getCell('A8').value = 'Tipo richiesta';
   ws.getCell('B8').value = tipo;
   ws.getCell('A9').value = (tipo==='Inserire' ? 'Inserire dal' : tipo==='Variare' ? 'Variare dal' : 'Eliminare dal');
@@ -414,7 +510,7 @@ async function exportXlsx(){
   ws.getCell(`H${r}`).value = 'Località';
   [`A${r}`,`E${r}`,`H${r}`].forEach(c=>{ws.getCell(c).font={bold:true};});
   r++;
-  clienti.forEach(c=>{
+  listaClienti.forEach(c=>{
     ws.getCell(`A${r}`).value = c.cod;
     ws.getCell(`E${r}`).value = c.rag;
     ws.getCell(`H${r}`).value = c.loc;
@@ -443,13 +539,38 @@ async function exportXlsx(){
     r++;
   });
 
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], {type:'application/octet-stream'});
+  return await wb.xlsx.writeBuffer();
+}
+
+function downloadBuffer(buf, fname){
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const fname = `Condizioni_Commerciali_${(new Date()).toISOString().slice(0,10)}.xlsx`;
-  a.href = url; a.download = fname; a.click();
-  URL.revokeObjectURL(url);
+  a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+async function exportXlsx(){
+  if(clienti.length===0){ alert('Aggiungi almeno un cliente'); return; }
+  if(righeEditori.length===0){ alert('Aggiungi almeno un editore'); return; }
+
+  const tipo = document.querySelector('input[name=tipo]:checked').value;
+  const data = document.getElementById('dataDecorrenza').value || '';
+  const perCliente = document.querySelector('input[name=modoFile]:checked').value === 'perCliente';
+  const oggi = (new Date()).toISOString().slice(0,10);
+
+  if(perCliente){
+    // Un file per cliente, con tutti gli editori/condizioni
+    for(const c of clienti){
+      const buf = await buildWorkbook([c], tipo, data);
+      const nome = `${c.cod ? c.cod+'_' : ''}${c.rag}`.replace(/[^\w\-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,60);
+      downloadBuffer(buf, `Condizioni_Commerciali_${nome}_${oggi}.xlsx`);
+      await new Promise(r=>setTimeout(r, 400)); // pausa tra i download: evita che il browser ne blocchi qualcuno
+    }
+  } else {
+    const buf = await buildWorkbook(clienti, tipo, data);
+    downloadBuffer(buf, `Condizioni_Commerciali_${oggi}.xlsx`);
+  }
 
   await salvaStorico(tipo, data);
 
